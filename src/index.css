@@ -109,3 +109,13 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+
+/* Pequena melhoria no botão de favorito */
+.movie-card img {
+  transition: filter 0.2s;
+}
+
+.movie-card:hover img {
+  filter: brightness(1.1);
+}
