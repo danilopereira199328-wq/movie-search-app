@@ -7,8 +7,7 @@ Uma aplicação de pesquisa de filmes construída com **React** e **Vite**, que 
 ---
 
 ## 📸 Captura de Ecrã
-
-*[Substitui esta linha por uma imagem do teu site. Tira um print, faz upload para o repositório e usa o caminho aqui. Exemplo: `![Movie Search App](screenshot.png)`]*
+ `![Movie Search App](screenshot.png)`]
 
 ---
 
