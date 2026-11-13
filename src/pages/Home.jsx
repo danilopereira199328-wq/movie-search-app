@@ -9,21 +9,21 @@ export default function Home() {
   const [filmes, setFilmes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const [totalResultados, setTotalResultados] = useState(0); // NOVO
   
   const [pesquisa, setPesquisa] = useState('marvel');
   const [genero, setGenero] = useState('');
   const [ano, setAno] = useState('');
+  const [pagina, setPagina] = useState(1); // NOVO
 
   const [favoritos, setFavoritos] = useState(() => {
     const guardados = localStorage.getItem('meusFavoritos');
     return guardados ? JSON.parse(guardados) : [];
   });
 
-  // Estado para o Utilizador (Login Google)
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Escuta as mudanças de estado do login
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
@@ -34,13 +34,19 @@ export default function Home() {
     localStorage.setItem('meusFavoritos', JSON.stringify(favoritos));
   }, [favoritos]);
 
+  // Reset da página quando muda a pesquisa/filtros
+  useEffect(() => {
+    setPagina(1);
+  }, [pesquisa, genero, ano]);
+
   useEffect(() => {
     const fetchFilmes = async () => {
       setLoading(true);
       setErro('');
       try {
         const termoPesquisa = genero ? `${pesquisa} ${genero}` : pesquisa;
-        let url = `${BASE_URL}?apikey=${OMDB_KEY}&s=${termoPesquisa}`;
+        // NOVO: Adiciona o parâmetro &page=
+        let url = `${BASE_URL}?apikey=${OMDB_KEY}&s=${termoPesquisa}&page=${pagina}`;
         if (ano) url += `&y=${ano}`;
 
         const res = await fetch(url);
@@ -48,9 +54,12 @@ export default function Home() {
 
         if (data.Response === 'False') {
           setFilmes([]);
+          setTotalResultados(0);
           setErro(data.Error || 'Nenhum filme encontrado.');
         } else {
           setFilmes(data.Search || []);
+          // NOVO: OMDb devolve o total de resultados ("totalResults")
+          setTotalResultados(parseInt(data.totalResults) || 0);
         }
       } catch (error) {
         setErro('Erro ao ligar à API.');
@@ -64,7 +73,7 @@ export default function Home() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [pesquisa, ano, genero]);
+  }, [pesquisa, ano, genero, pagina]);
 
   const toggleFavorito = (e, filme) => {
     e.preventDefault();
@@ -86,6 +95,9 @@ export default function Home() {
 
   const handleLogout = () => signOut(auth);
 
+  // NOVO: Cálculo do total de páginas (10 resultados por página no OMDb)
+  const totalPaginas = Math.ceil(totalResultados / 10);
+
   return (
     <div className="container">
       <header className="header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
@@ -103,7 +115,6 @@ export default function Home() {
             ❤️ Favoritos ({favoritos.length})
           </Link>
           
-          {/* SISTEMA DE LOGIN */}
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <img src={user.photoURL} alt="Avatar" style={{ width: 32, height: 32, borderRadius: '50%' }} />
@@ -133,35 +144,71 @@ export default function Home() {
       </div>
 
       <h2 className="section-title">Resultados da Pesquisa</h2>
-      {loading && <p className="loading">A carregar filmes...</p>}
+
+      {/* NOVO: SKELETON LOADERS */}
+      {loading && (
+        <div className="movie-grid">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="skeleton-card">
+              <div className="skeleton-poster"></div>
+              <div className="skeleton-info">
+                <div className="skeleton-title"></div>
+                <div className="skeleton-year"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {erro && !loading && <p className="loading" style={{ color: 'red' }}>{erro}</p>}
 
       {!loading && !erro && (
-        <div className="movie-grid">
-          {filmes.map(filme => {
-            const isFavorito = favoritos.some(f => f.imdbID === filme.imdbID);
-            return (
-              <div key={filme.imdbID} className="movie-card-wrapper">
-                <Link to={`/movie/${filme.imdbID}`} className="movie-card">
-                  <img 
-                    src={filme.Poster !== 'N/A' ? filme.Poster : 'https://placehold.co/500x750?text=Sem+Imagem'} 
-                    alt={filme.Title} 
-                  />
-                  <div className="movie-card-info">
-                    <h3>{filme.Title}</h3>
-                    <p>{filme.Year}</p>
-                  </div>
-                </Link>
-                <button 
-                  className={`btn-fav ${isFavorito ? 'active' : ''}`}
-                  onClick={(e) => toggleFavorito(e, filme)}
-                >
-                  {isFavorito ? '❤️' : '🤍'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        <>
+          <div className="movie-grid">
+            {filmes.map(filme => {
+              const isFavorito = favoritos.some(f => f.imdbID === filme.imdbID);
+              return (
+                <div key={filme.imdbID} className="movie-card-wrapper">
+                  <Link to={`/movie/${filme.imdbID}`} className="movie-card">
+                    <img 
+                      src={filme.Poster !== 'N/A' ? filme.Poster : 'https://placehold.co/500x750?text=Sem+Imagem'} 
+                      alt={filme.Title} 
+                    />
+                    <div className="movie-card-info">
+                      <h3>{filme.Title}</h3>
+                      <p>{filme.Year}</p>
+                    </div>
+                  </Link>
+                  <button 
+                    className={`btn-fav ${isFavorito ? 'active' : ''}`}
+                    onClick={(e) => toggleFavorito(e, filme)}
+                  >
+                    {isFavorito ? '❤️' : '🤍'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* NOVO: PAGINAÇÃO */}
+          {totalPaginas > 1 && (
+            <div className="pagination">
+              <button 
+                onClick={() => setPagina(p => Math.max(1, p - 1))}
+                disabled={pagina === 1}
+              >
+                ← Anterior
+              </button>
+              <span>Página {pagina} de {totalPaginas}</span>
+              <button 
+                onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                disabled={pagina >= totalPaginas}
+              >
+                Próxima →
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Secção de Plataformas (mantida) */}

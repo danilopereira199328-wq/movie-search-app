@@ -38,41 +38,55 @@ export default function MovieDetails() {
           }
 
           // 2. Buscar no TMDB (para Trailer e Onde Assistir)
-          if (data.imdbID && TMDB_KEY) {
-            try {
-              // Descobrir o ID do TMDB a partir do IMDb
-              const resFind = await fetch(`${TMDB_BASE_URL}/find/${data.imdbID}?api_key=${TMDB_KEY}&external_source=imdb_id&language=pt-PT`);
-              const dataFind = await resFind.json();
-              
-              if (dataFind.movie_results && dataFind.movie_results.length > 0) {
-                const tmdbId = dataFind.movie_results[0].id;
-                
-                // A) BUSCAR TRAILER
-                const resVideos = await fetch(`${TMDB_BASE_URL}/movie/${tmdbId}/videos?api_key=${TMDB_KEY}&language=pt-PT`);
-                const dataVideos = await resVideos.json();
-                
-                // Procura um trailer no YouTube (em PT ou EN)
-                const trailer = dataVideos.results?.find(v => v.site === 'YouTube' && v.type === 'Trailer');
-                if (trailer) setTrailerKey(trailer.key);
-                
-                // B) BUSCAR ONDE ASSISTIR (Providers)
-                const resProviders = await fetch(`${TMDB_BASE_URL}/movie/${tmdbId}/watch/providers?api_key=${TMDB_KEY}`);
-                const dataProviders = await resProviders.json();
-                
-                if (dataProviders.results && dataProviders.results.PT) {
-                  setProviders(dataProviders.results.PT.flatrate || []);
-                  // O link direto para o JustWatch é fornecido pelo TMDB
-                  if (dataProviders.results.PT.link) {
-                    setWatchLink(dataProviders.results.PT.link);
-                  }
-                } else {
-                  setProviders([]);
-                }
-              }
-            } catch (e) {
-              console.error("Erro no TMDB:", e);
-            }
-          }
+if (data.imdbID && TMDB_KEY) {
+  try {
+    const resFind = await fetch(`${TMDB_BASE_URL}/find/${data.imdbID}?api_key=${TMDB_KEY}&external_source=imdb_id&language=pt-PT`);
+    const dataFind = await resFind.json();
+    
+    if (dataFind.movie_results && dataFind.movie_results.length > 0) {
+      const tmdbId = dataFind.movie_results[0].id;
+      
+      // A) BUSCAR TRAILER (Com Fallback de Idioma e Tipo)
+      let trailerEncontrado = null;
+
+      // Tentativa 1: Português
+      const resVideosPT = await fetch(`${TMDB_BASE_URL}/movie/${tmdbId}/videos?api_key=${TMDB_KEY}&language=pt-PT`);
+      const dataVideosPT = await resVideosPT.json();
+      trailerEncontrado = dataVideosPT.results?.find(v => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser'));
+
+      // Tentativa 2: Inglês (Fallback)
+      if (!trailerEncontrado) {
+        const resVideosEN = await fetch(`${TMDB_BASE_URL}/movie/${tmdbId}/videos?api_key=${TMDB_KEY}&language=en-US`);
+        const dataVideosEN = await resVideosEN.json();
+        trailerEncontrado = dataVideosEN.results?.find(v => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser'));
+      }
+
+      // Tentativa 3: Qualquer vídeo do YouTube (último recurso)
+      if (!trailerEncontrado) {
+        const resVideosAll = await fetch(`${TMDB_BASE_URL}/movie/${tmdbId}/videos?api_key=${TMDB_KEY}`);
+        const dataVideosAll = await resVideosAll.json();
+        trailerEncontrado = dataVideosAll.results?.find(v => v.site === 'YouTube');
+      }
+
+      if (trailerEncontrado) setTrailerKey(trailerEncontrado.key);
+      
+      // B) BUSCAR ONDE ASSISTIR (Providers) - Mantém-se igual
+      const resProviders = await fetch(`${TMDB_BASE_URL}/movie/${tmdbId}/watch/providers?api_key=${TMDB_KEY}`);
+      const dataProviders = await resProviders.json();
+      
+      if (dataProviders.results && dataProviders.results.PT) {
+        setProviders(dataProviders.results.PT.flatrate || []);
+        if (dataProviders.results.PT.link) {
+          setWatchLink(dataProviders.results.PT.link);
+        }
+      } else {
+        setProviders([]);
+      }
+    }
+  } catch (e) {
+    console.error("Erro no TMDB:", e);
+  }
+}
         }
       } catch (error) {
         console.error("Erro ao carregar detalhes:", error);
